@@ -1,0 +1,66 @@
+% ------- Endoscope : MGI + affichage 3D -------
+clear; close all; clc;
+
+%%% Constants definition %%%
+L  = 12e-3;   % longueur de la partie orientable de l'endoscope
+xp = 1e-3;
+yp = 1e-3;
+zp = 1e-3;
+P  = [xp, yp, zp];   % position désirée (extrémité)
+
+%%% MGI %%%
+Phi = atan2(yp, xp);
+k   = (2 * sqrt(xp^2 + yp^2)) / (xp^2 + yp^2 + zp^2);
+
+fprintf('Phi = %.4f rad\n', Phi);
+fprintf('k   = %.4f (1/m)\n', k);
+
+%%% Modèle géométrique DIRECT le long de la section (s de 0 à L) %%%
+% Pour une courbure k et un angle phi donnés, la forme de la section
+% flexible entre 0 et s est :
+%   x(s) = (1/k) * cos(phi) * (1 - cos(k*s))
+%   y(s) = (1/k) * sin(phi) * (1 - cos(k*s))
+%   z(s) = (1/k) * sin(k*s)
+% Cas particulier k=0 (section droite) : x=y=0, z=s.
+
+shape = @(k, phi, s) deal( ...
+    (k~=0) .* (1/max(k,eps)) .* cos(phi) .* (1 - cos(k.*s)) + (k==0)*0, ...
+    (k~=0) .* (1/max(k,eps)) .* sin(phi) .* (1 - cos(k.*s)) + (k==0)*0, ...
+    (k~=0) .* (1/max(k,eps)) .* sin(k.*s)               + (k==0).*s );
+
+s = linspace(0, L, 100);
+
+%%% Vérification : le point final calculé doit correspondre à P %%%
+[xf, yf, zf] = shape(k, Phi, L);
+fprintf('Point atteint : [%.5f %.5f %.5f]  (attendu : [%.5f %.5f %.5f])\n', ...
+        xf, yf, zf, xp, yp, zp);
+
+%%% Animation : k varie linéairement de 0 (droit) à k_final %%%
+figure('Color','w');
+hold on; grid on; axis equal;
+xlabel('x (m)'); ylabel('y (m)'); zlabel('z (m)');
+title('Déploiement de la section flexible de l''endoscope');
+view(45, 25);
+
+% Bornes fixes pour ne pas que les axes bougent pendant l'animation
+lim = L * 1.1;
+xlim([-lim lim]); ylim([-lim lim]); zlim([0 lim]);
+
+plot3(0,0,0,'ko','MarkerFaceColor','k');      % base de l'endoscope
+h_curve = plot3(nan,nan,nan,'b-','LineWidth',2);
+h_tip   = plot3(nan,nan,nan,'ro','MarkerFaceColor','r','MarkerSize',8);
+plot3(xp, yp, zp, 'g^', 'MarkerFaceColor','g', 'MarkerSize',10); % cible
+
+N = 60; % nombre d'images de l'animation
+for i = 1:N
+    k_i = k * (i/N);           % interpolation linéaire de la courbure
+    [xs, ys, zs] = shape(k_i, Phi, s);
+
+    set(h_curve, 'XData', xs, 'YData', ys, 'ZData', zs);
+    set(h_tip,   'XData', xs(end), 'YData', ys(end), 'ZData', zs(end));
+
+    legend('Base','Section flexible','Extrémité','Point désiré', ...
+           'Location','best');
+    drawnow;
+    pause(0.03);
+end

@@ -1,0 +1,65 @@
+% ------- Test calibration : theta=30 deg, phi = 0 puis 90 deg -------
+clear; close all; clc;
+
+addpath(genpath('C:\Program Files\CoppeliaRobotics\CoppeliaSimEdu\programming\zmqRemoteApi\clients\matlab'))
+
+if exist('client', 'var')
+    try
+        client.delete();
+    catch
+    end
+end
+
+client = RemoteAPIClient();
+sim = client.getObject('sim');
+sim.setStepping(true);
+
+if sim.getSimulationState() == sim.simulation_stopped
+    sim.startSimulation();
+end
+
+N = 20;
+jointFlex = zeros(1,N);
+for i = 1:N
+    jointFlex(i) = sim.getObject(['/Joint_flex_' num2str(i)]);
+end
+jointPhi = sim.getObject('/Joint_rotation_phi'); 
+jointInsertion = sim.getObject('/Joint_insertion');
+
+theta_test = deg2rad(30);
+phi_tests = [0, 90];
+
+for t = 1:length(phi_tests)
+
+    % reset
+    for i = 1:N
+        sim.setJointPosition(jointFlex(i), 0);
+    end
+    sim.setJointPosition(jointPhi, 0);
+    sim.setJointPosition(jointInsertion, 0);
+    sim.step();
+    pause(0.3);
+
+    pos1 = sim.getObjectPosition(jointFlex(1), -1);
+    base = [pos1{1}, pos1{2}, pos1{3}];
+
+    % rotation phi, puis flexion
+    sim.setJointPosition(jointPhi, deg2rad(phi_tests(t)));
+    for i = 1:N
+        sim.setJointPosition(jointFlex(i), theta_test/N);
+    end
+    sim.step();
+    pause(0.3);
+
+    posN = sim.getObjectPosition(jointFlex(N), -1);
+    fin = [posN{1}, posN{2}, posN{3}];
+    d = fin - base;
+
+    fprintf('phi=%d deg : dx=%.4f dy=%.4f dz=%.4f\n', phi_tests(t), d(1), d(2), d(3));
+end
+
+fprintf('attendu : avancement |dy| = 0.0817, deviation laterale = 0.0219\n');
+
+sim.setStepping(false);
+pause(0.2);
+clear client sim
